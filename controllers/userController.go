@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 
 	"authorization/initializers"
@@ -10,39 +11,89 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type SignUpInput struct {
+	Email    string `form:"email" binding:"required"`
+	Password string `form:"password" binding:"required"`
+}
+
 func SignUp(c *gin.Context) {
-	var body struct {
-		Email    string
-		Password string
-	}
-	if c.Bind(&body) != nil {
-		c.HTML(http.StatusBadRequest, "signup", gin.H{
-			"error": "Failed signup",
-		})
+	var input SignUpInput
+	if err := c.ShouldBind(&input); err != nil {
+		c.HTML(http.StatusBadRequest, "signup.html", gin.H{"message": "Invalid input"})
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
+
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		c.HTML(http.StatusBadRequest, "signup", gin.H{
-			"error": "Wrong password",
-		})
-		return
-
-	}
-	user := models.User{Email: body.Email, Password: string(hash)}
-
-	result := initializers.DB.Create(&user) // pass pointer of data to Create
-	if result.Error != nil {
-		c.HTML(http.StatusBadRequest, "signup", gin.H{
-			"error": "Failed to create user",
-		})
+		c.HTML(http.StatusInternalServerError, "signup.html", gin.H{"message": "Failed to hash password"})
 		return
 	}
-	c.HTML(http.StatusOK, "signup", gin.H{
-		"message": "Success",
-	})
+
+	// Create the user
+	user := models.User{
+		Email:    input.Email,
+		Password: string(hashedPassword),
+	}
+
+	if err := initializers.DB.Create(&user).Error; err != nil {
+		c.HTML(http.StatusInternalServerError, "signup.html", gin.H{"message": "Failed to create user"})
+		return
+	}
+
+	c.HTML(http.StatusOK, "login.html", gin.H{"message": "User created successfully"})
 }
 
 func SignUpPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "signup.html", gin.H{}) // Render the signup.html template
+}
+
+type LoginInput struct {
+	Email    string `form:"email" binding:"required"`
+	Password string `form:"password" binding:"required"`
+}
+
+func Login(c *gin.Context) {
+	var input LoginInput
+	if err := c.ShouldBind(&input); err != nil {
+		c.HTML(http.StatusBadRequest, "login.html", gin.H{"message": "Invalid input"})
+		return
+	}
+
+	// Find user by email
+	var user models.User
+	if err := initializers.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		c.HTML(http.StatusUnauthorized, "login.html", gin.H{"message": "Invalid credentials"})
+		return
+	}
+
+	// Compare passwords
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
+	if err != nil {
+		c.HTML(http.StatusUnauthorized, "login.html", gin.H{"message": "Invalid credentials"})
+		return
+	}
+
+	// Set session or token here
+	// For example, using gin sessions:
+	c.SetCookie("user_id", fmt.Sprintf("%d", user.ID), 3600, "/", "", false, true)
+
+	c.HTML(http.StatusOK, "login.html", gin.H{"message": "Login successful"})
+}
+
+func LoginPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "login.html", gin.H{})
+}
+
+// controllers/middleware.go
+func AuthMiddleware(c *gin.Context) {
+    userID, err := c.Cookie("user_id")
+    if err != nil {
+        c.Redirect(http.StatusSeeOther, "/login")
+        c.Abort()
+        return
+    }
+    
+    c.Set("user_id", userID)
+    c.Next()
 }
