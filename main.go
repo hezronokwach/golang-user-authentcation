@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"authorization/controllers"
 	"authorization/initializers"
 
@@ -9,14 +11,25 @@ import (
 
 func init() {
 	initializers.LoadEnv()
+	log.Println("Initializing database connection...")
 	initializers.ConnectToDb()
+	log.Println("Running database migrations...")
 	initializers.SyncDb()
 }
 
 func main() {
-	r := gin.Default()
-    r.LoadHTMLGlob("templates/*") // Load HTML templates
-	r.POST("/signup", controllers.SignUp)
-    r.GET("/signup", controllers.SignUpPage) // Add a route to serve the signup page
-	r.Run() // listen and serve on 0.0.0.0:8080
+    r := gin.Default()
+    r.LoadHTMLGlob("templates/*")
+    
+    // Public routes
+    r.POST("/signup", controllers.SignUp)
+    r.GET("/signup", controllers.SignUpPage)
+    r.POST("/login", controllers.Login)
+    r.GET("/login", controllers.LoginPage)
+    
+    // Protected routes group
+    protected := r.Group("/")
+    protected.Use(controllers.AuthMiddleware)
+    
+    r.Run()
 }
