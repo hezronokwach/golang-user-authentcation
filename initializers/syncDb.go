@@ -5,11 +5,12 @@ import (
 	"log"
 )
 
+// initializers/syncDb.go
 func SyncDb() {
-	var err error
-	// Now you can use GORM features
-	err = DB.AutoMigrate(&models.User{}) // Assuming 'User' is your model
-	if err != nil {
-		log.Fatal(err)
-	}
+    log.Println("Starting database migration...")
+    err := DB.AutoMigrate(&models.User{})
+    if err != nil {
+        log.Fatalf("Failed to migrate database: %v", err)
+    }
+    log.Println("Database migration completed successfully")
 }
