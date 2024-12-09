@@ -27,9 +27,5 @@ func main() {
     r.POST("/login", controllers.Login)
     r.GET("/login", controllers.LoginPage)
     
-    // Protected routes group
-    protected := r.Group("/")
-    protected.Use(controllers.AuthMiddleware)
-    
     r.Run()
 }

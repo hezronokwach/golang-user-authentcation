@@ -1,8 +1,8 @@
 package controllers
 
 import (
-	"fmt"
 	"net/http"
+	"regexp"
 
 	"authorization/initializers"
 	"authorization/models"
@@ -12,14 +12,24 @@ import (
 )
 
 type SignUpInput struct {
-	Email    string `form:"email" binding:"required"`
-	Password string `form:"password" binding:"required"`
+	Email       string `form:"email" binding:"required"`
+	Password    string `form:"password" binding:"required"`
+	PhoneNumber string `form:"phone_number" binding:"required"`
+	FirstName   string `form:"first_name" binding:"required"`
+	LastName    string `form:"last_name" binding:"required"`
 }
 
 func SignUp(c *gin.Context) {
 	var input SignUpInput
 	if err := c.ShouldBind(&input); err != nil {
 		c.HTML(http.StatusBadRequest, "signup.html", gin.H{"message": "Invalid input"})
+		return
+	}
+
+	// Validate email format
+	emailRegex := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	if matched, _ := regexp.MatchString(emailRegex, input.Email); !matched {
+		c.HTML(http.StatusBadRequest, "signup.html", gin.H{"message": "Invalid email format"})
 		return
 	}
 
@@ -32,8 +42,11 @@ func SignUp(c *gin.Context) {
 
 	// Create the user
 	user := models.User{
-		Email:    input.Email,
-		Password: string(hashedPassword),
+		Email:       input.Email,
+		Password:    string(hashedPassword),
+		PhoneNumber: input.PhoneNumber,
+		FirstName:   input.FirstName,
+		LastName:    input.LastName,
 	}
 
 	if err := initializers.DB.Create(&user).Error; err != nil {
@@ -73,27 +86,9 @@ func Login(c *gin.Context) {
 		c.HTML(http.StatusUnauthorized, "login.html", gin.H{"message": "Invalid credentials"})
 		return
 	}
-
-	// Set session or token here
-	// For example, using gin sessions:
-	c.SetCookie("user_id", fmt.Sprintf("%d", user.ID), 3600, "/", "", false, true)
-
 	c.HTML(http.StatusOK, "login.html", gin.H{"message": "Login successful"})
 }
 
 func LoginPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "login.html", gin.H{})
-}
-
-// controllers/middleware.go
-func AuthMiddleware(c *gin.Context) {
-    userID, err := c.Cookie("user_id")
-    if err != nil {
-        c.Redirect(http.StatusSeeOther, "/login")
-        c.Abort()
-        return
-    }
-    
-    c.Set("user_id", userID)
-    c.Next()
 }
